@@ -164,11 +164,10 @@ hpc:
     account: "group-jasonclark"
     user: "g91p721"
     project_dir: "/home/g91p721/jd"
-    gpu_partition: "gpu"      # VERIFY with: sinfo -o "%P %G"
+    gpu_partition: "nextgen-gpu"
+    gpu_gres: "gpu:h100:1"
     cpu_partition: "unsafe"
-    modules:
-      - "OpenSSL/3"
-      - "Python/3.12.3-GCCcore-13.3.0"
+    env_script: "runs/tempest_env.sh"
 
   quartz_fallback:
     account: "r01834"

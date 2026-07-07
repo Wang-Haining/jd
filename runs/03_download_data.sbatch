@@ -11,7 +11,7 @@
 #SBATCH --error=logs/data_%j.err
 
 # ============================================================================
-# Step 2: Download benchmarks + fit corpus
+# Step 2: Download HealthBench Hard + generic J-lens fit corpus
 #
 # USAGE:
 #   sbatch runs/03_download_data.sbatch
@@ -26,32 +26,16 @@ cd /home/g91p721/jd
 source runs/tempest_env.sh
 source .venv/bin/activate
 
-mkdir -p data/medqa data/diversity data/healthbench data/fit_corpus
-
-echo "=== Downloading MedQA ==="
-python -c "
-from datasets import load_dataset
-ds = load_dataset('GBaker/MedQA-USMLE-4-options')
-ds.save_to_disk('data/medqa/full')
-print(f'MedQA splits: {list(ds.keys())}')
-print(f'Test set: {len(ds[\"test\"])} cases')
-print(f'Sample Q: {ds[\"test\"][0][\"question\"][:120]}...')
-"
-
-echo ""
-echo "=== Downloading DiversityMedQA ==="
-python -c "
-from datasets import load_dataset
-ds = load_dataset('Rajat1212/DiversityMedQA')
-ds.save_to_disk('data/diversity/full')
-print(f'DiversityMedQA: {ds}')
-"
+mkdir -p data/healthbench data/fit_corpus
 
 echo ""
 echo "=== Downloading HealthBench Hard ==="
 cd data/healthbench
-wget -q -O hard.jsonl \
-  'https://openaipublic.blob.core.windows.net/simple-evals/healthbench/hard_2025-05-08-21-00-10.jsonl'
+python -c "
+from urllib.request import urlretrieve
+url = 'https://openaipublic.blob.core.windows.net/simple-evals/healthbench/hard_2025-05-08-21-00-10.jsonl'
+urlretrieve(url, 'hard.jsonl')
+"
 echo "HealthBench Hard: $(wc -l < hard.jsonl) cases"
 cd ../..
 
@@ -84,8 +68,6 @@ print(f'Fit corpus ({source}): {len(texts)} sequences saved')
 
 echo ""
 echo "=== QC SUMMARY ==="
-echo "MedQA:       $(python -c "from datasets import load_from_disk; print(len(load_from_disk('data/medqa/full')['test']))")"
-echo "Diversity:   $(python -c "from datasets import load_from_disk; d=load_from_disk('data/diversity/full'); print(len(list(d.values())[0]))")"
 echo "HealthBench: $(wc -l < data/healthbench/hard.jsonl)"
 echo "Fit corpus:  $(python -c "import json; print(len(json.load(open('data/fit_corpus/c4_slice.json'))))")"
 echo ""
