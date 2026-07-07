@@ -1,0 +1,179 @@
+# jd experiment configuration
+
+models:
+  smoke_test:
+    name: "Qwen/Qwen2.5-7B-Instruct"
+    dtype: "float16"
+    device_map: "auto"
+    max_new_tokens: 200
+    temperature: 0.3
+    do_sample: true
+
+  primary:
+    name: "Qwen/Qwen2.5-7B-Instruct"
+    dtype: "float16"
+    device_map: "auto"
+    max_new_tokens: 800
+    temperature: 0.0
+    do_sample: false
+
+  healthbench_primary:
+    name: "Qwen/Qwen2.5-7B-Instruct"
+    dtype: "float16"
+    device_map: "auto"
+    max_new_tokens: 800
+    temperature: 0.0
+    do_sample: false
+
+  secondary:
+    name: "Qwen/Qwen2.5-7B-Instruct"
+    dtype: "float16"
+    device_map: "auto"
+    max_new_tokens: 200
+    temperature: 0.3
+    do_sample: true
+
+  fallback_small:
+    name: "Qwen/Qwen2.5-3B-Instruct"
+    dtype: "float16"
+    device_map: "auto"
+    max_new_tokens: 200
+    temperature: 0.3
+    do_sample: true
+
+agents:
+  conservative:
+    system_prompt: >
+      You are a conservative clinical reasoner. You favor common diagnoses over
+      rare ones, require strong evidence before concluding, and flag uncertainty
+      explicitly. When unsure, you lean toward the safer, more established
+      interpretation. Answer the clinical question by stating the letter (A, B, C, or D)
+      followed by a brief rationale in 2-3 sentences.
+
+  aggressive:
+    system_prompt: >
+      You are a thorough clinical diagnostician who considers the full differential.
+      You are willing to consider less common diagnoses if the evidence fits. You
+      prioritize not missing critical diagnoses even at the cost of some false
+      positives. Answer the clinical question by stating the letter (A, B, C, or D)
+      followed by a brief rationale in 2-3 sentences.
+
+  evidence:
+    system_prompt: >
+      You are an evidence-based medicine specialist. You ground every claim in
+      established guidelines and published evidence. You are skeptical of
+      pattern-matching without data support. Answer the clinical question by stating
+      the letter (A, B, C, or D) followed by a brief rationale in 2-3 sentences.
+
+benchmarks:
+  medqa:
+    source: "GBaker/MedQA-USMLE-4-options"
+    split: "test"
+    n_cases: 200
+    format: "mcq_4option"
+
+  diversity_medqa:
+    source: "Rajat1212/DiversityMedQA"
+    split: "test"
+    n_cases: 200
+    format: "mcq_counterfactual"
+
+  healthbench_hard:
+    source: "https://openaipublic.blob.core.windows.net/simple-evals/healthbench/hard_2025-05-08-21-00-10.jsonl"
+    n_cases: 100
+    format: "multi_turn_rubric"
+    primary_outcome: "rubric_score"
+
+jspace:
+  # Lens fitting parameters
+  fit_n_prompts: 100        # paper says ~100 sufficient
+  fit_seq_length: 128       # tokens per sequence
+  fit_corpus: "data/fit_corpus/c4_slice.json"
+
+  # Extraction parameters
+  top_k: 50                 # top tokens to extract per layer
+  layers: "middle_third"    # read layers L/3 to 2L/3
+  positions: [-1]           # last token before generation
+
+  # Uncertainty/confidence token sets for STD computation
+  uncertainty_tokens:
+    - "uncertain"
+    - "unsure"
+    - "maybe"
+    - "wrong"
+    - "error"
+    - "incorrect"
+    - "doubt"
+    - "unclear"
+    - "ambiguous"
+    - "conflict"
+    - "not"
+    - "but"
+    - "however"
+    - "risky"
+    - "unlikely"
+    - "questionable"
+
+  confidence_tokens:
+    - "correct"
+    - "certain"
+    - "confident"
+    - "clear"
+    - "obvious"
+    - "definitely"
+    - "yes"
+    - "right"
+    - "true"
+    - "answer"
+    - "likely"
+    - "consistent"
+
+orchestration:
+  strategies:
+    - "single_neutral"
+    - "debate_round_robin"
+    - "debate_agent_handoff"
+    - "debate_jlens_next"
+
+  # Thresholds
+  cas_filter_percentile: 50   # align_route: keep agents above median CAS
+  std_divergence_threshold: 1.5  # diverge_surface: trigger re-eval if STD > this
+
+healthbench_run:
+  download_if_missing: true
+  smoke_n_cases: 3
+  pilot_n_cases: 20
+  study_n_cases: 100
+  max_clinician_agents: 5
+  discussion_round_cap: 5
+  duplicate_grade_rate: 0.2
+  generation:
+    max_new_tokens: 800
+    temperature: 0.0
+    do_sample: false
+  scorer:
+    model: "gpt-4.1-2025-04-14"
+
+analysis:
+  seed: 42
+  alpha: 0.05
+  ci_level: 0.95
+
+hpc:
+  tempest:
+    account: "group-jasonclark"
+    user: "g91p721"
+    project_dir: "/home/g91p721/jd"
+    gpu_partition: "gpu"      # VERIFY with: sinfo -o "%P %G"
+    cpu_partition: "unsafe"
+    modules:
+      - "OpenSSL/3"
+      - "Python/3.12.3-GCCcore-13.3.0"
+
+  quartz_fallback:
+    account: "r01834"
+    user: "hw56"
+    project_dir: "/N/project/depot/hw56/jd"
+    gpu_partition: "general"
+    modules:
+      - "python/3.11"
