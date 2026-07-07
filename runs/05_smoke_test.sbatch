@@ -1,13 +1,13 @@
 #!/bin/bash
 #SBATCH --job-name=jd_smoke
-#SBATCH --partition=gpu
+#SBATCH --partition=gputest
 #SBATCH --account=group-jasonclark
-#SBATCH --time=0-02:00:00
+#SBATCH --time=0-01:00:00
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64G
-#SBATCH --gres=gpu:1
+#SBATCH --gpus-per-task=1
 #SBATCH --output=logs/smoke_%j.out
 #SBATCH --error=logs/smoke_%j.err
 #SBATCH --mail-type=END,FAIL
@@ -23,14 +23,10 @@
 # ============================================================================
 
 set -euo pipefail
-module purge
-module load OpenSSL/3 Python/3.12.3-GCCcore-13.3.0
 
 cd /home/g91p721/jd
+source runs/tempest_env.sh
 source .venv/bin/activate
-export PYTHONNOUSERSITE=1
-export PYTHONUNBUFFERED=1
-export HF_HOME=/home/g91p721/.cache/huggingface
 
 mkdir -p results logs
 

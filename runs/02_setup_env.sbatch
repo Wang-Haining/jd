@@ -21,15 +21,12 @@
 
 set -euo pipefail
 
-module purge
-module load OpenSSL/3 Python/3.12.3-GCCcore-13.3.0
-
 PROJ=/home/g91p721/jd
 cd $PROJ
+source runs/tempest_env.sh
 
 python -m venv .venv
 source .venv/bin/activate
-export PYTHONNOUSERSITE=1
 
 pip install --upgrade pip
 
@@ -56,6 +53,7 @@ print('=== ALL IMPORTS OK ===')
 print(f'torch {torch.__version__}, CUDA {torch.version.cuda}')
 print(f'transformers {transformers.__version__}')
 print(f'jlens: {dir(jlens)}')
+print(f'CUDA available: {torch.cuda.is_available()}')
 "
 
 echo "=== SETUP COMPLETE ==="

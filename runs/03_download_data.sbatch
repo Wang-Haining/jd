@@ -21,12 +21,10 @@
 # ============================================================================
 
 set -euo pipefail
-module purge
-module load OpenSSL/3 Python/3.12.3-GCCcore-13.3.0
 
 cd /home/g91p721/jd
+source runs/tempest_env.sh
 source .venv/bin/activate
-export PYTHONNOUSERSITE=1
 
 mkdir -p data/medqa data/diversity data/healthbench data/fit_corpus
 

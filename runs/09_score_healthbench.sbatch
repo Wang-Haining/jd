@@ -18,13 +18,10 @@
 #   sbatch runs/09_score_healthbench.sbatch
 
 set -euo pipefail
-module purge
-module load OpenSSL/3 Python/3.12.3-GCCcore-13.3.0
 
 cd /home/g91p721/jd
+source runs/tempest_env.sh
 source .venv/bin/activate
-export PYTHONNOUSERSITE=1
-export PYTHONUNBUFFERED=1
 
 HB_RUN=${HB_RUN:-study_n100_seed42}
 DUP_RATE=${DUP_RATE:-0.2}
