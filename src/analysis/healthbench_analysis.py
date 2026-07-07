@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 try:
     import numpy as np
@@ -182,11 +183,136 @@ def signal_correlations(
         "jlens_route_std_min",
     ]:
         usable = merged[["score_difference", col]].dropna()
-        if len(usable) < 3:
-            corr = float("nan")
-        else:
-            corr = float(usable["score_difference"].corr(usable[col]))
+        corr = _safe_corr(usable["score_difference"], usable[col]) if len(usable) >= 3 else float("nan")
         rows.append({"signal": col, "n": len(usable), "pearson_r": corr})
+    return pd.DataFrame(rows)
+
+
+def duplicate_grade_qc(scores_jsonl: str | Path) -> pd.DataFrame:
+    """Summarize primary-vs-duplicate grading stability."""
+    _require_deps()
+    records = read_jsonl(scores_jsonl)
+    rows = []
+    for record in records:
+        rows.append(
+            {
+                "case_id": record["case_id"],
+                "strategy": record["strategy"],
+                "replicate": record.get("replicate", "primary"),
+                "score": record["score"],
+            }
+        )
+    if not rows:
+        return pd.DataFrame([_duplicate_qc_empty_row()])
+
+    frame = pd.DataFrame(rows)
+    wide = frame.pivot_table(
+        index=["case_id", "strategy"],
+        columns="replicate",
+        values="score",
+        aggfunc="first",
+    )
+    if "primary" not in wide or "duplicate" not in wide:
+        return pd.DataFrame([_duplicate_qc_empty_row()])
+
+    paired = wide[["primary", "duplicate"]].dropna()
+    if paired.empty:
+        return pd.DataFrame([_duplicate_qc_empty_row()])
+
+    abs_diff = (paired["duplicate"] - paired["primary"]).abs()
+    return pd.DataFrame(
+        [
+            {
+                "n_duplicate_pairs": int(len(abs_diff)),
+                "mean_abs_difference": float(abs_diff.mean()),
+                "median_abs_difference": float(abs_diff.median()),
+                "max_abs_difference": float(abs_diff.max()),
+            }
+        ]
+    )
+
+
+def routing_diagnostics(
+    scores_jsonl: str | Path,
+    baseline: str = "debate_round_robin",
+    target: str = "debate_jlens_next",
+    comparator: str = "debate_agent_handoff",
+) -> pd.DataFrame:
+    """Summarize debate routing behavior from stored strategy metadata."""
+    _require_deps()
+    records = [
+        record
+        for record in read_jsonl(scores_jsonl)
+        if record.get("replicate", "primary") == "primary"
+    ]
+    by_case: dict[str, dict[str, dict[str, Any]]] = {}
+    for record in records:
+        by_case.setdefault(str(record["case_id"]), {})[str(record["strategy"])] = record
+
+    target_cases = 0
+    baseline_matches = 0
+    comparator_matches = 0
+    steps = 0
+    narrowed_steps = 0
+    tie_breakers: dict[str, int] = {}
+    selected_to: dict[str, int] = {}
+    std_tied_sizes: dict[int, int] = {}
+
+    for strategies in by_case.values():
+        if target not in strategies:
+            continue
+        target_cases += 1
+        target_route = _route_to_sequence(strategies[target])
+        if baseline in strategies and target_route == _route_to_sequence(strategies[baseline]):
+            baseline_matches += 1
+        if comparator in strategies and target_route == _route_to_sequence(strategies[comparator]):
+            comparator_matches += 1
+
+        for step in _route_trace(strategies[target]):
+            steps += 1
+            selected = str(step.get("to", "missing"))
+            selected_to[selected] = selected_to.get(selected, 0) + 1
+            tie_breaker = str(step.get("tie_breaker", "none"))
+            tie_breakers[tie_breaker] = tie_breakers.get(tie_breaker, 0) + 1
+            candidates = step.get("std_tied_candidates") or step.get("score_tied_candidates") or []
+            candidate_count = len(candidates)
+            std_tied_sizes[candidate_count] = std_tied_sizes.get(candidate_count, 0) + 1
+            candidate_scores = step.get("candidate_scores", {}) or {}
+            if candidate_scores and candidate_count < len(candidate_scores):
+                narrowed_steps += 1
+
+    rows = [
+        {"metric": "n_cases", "value": int(len(by_case))},
+        {"metric": "target_cases", "value": int(target_cases)},
+        {"metric": "target_route_steps", "value": int(steps)},
+        {"metric": f"{target}_equals_{baseline}_cases", "value": int(baseline_matches)},
+        {
+            "metric": f"{target}_equals_{baseline}_fraction",
+            "value": _safe_fraction(baseline_matches, target_cases),
+        },
+        {"metric": f"{target}_equals_{comparator}_cases", "value": int(comparator_matches)},
+        {
+            "metric": f"{target}_equals_{comparator}_fraction",
+            "value": _safe_fraction(comparator_matches, target_cases),
+        },
+        {"metric": "target_narrowed_tie_steps", "value": int(narrowed_steps)},
+        {
+            "metric": "target_narrowed_tie_step_fraction",
+            "value": _safe_fraction(narrowed_steps, steps),
+        },
+    ]
+    rows.extend(
+        {"metric": f"tie_breaker:{key}", "value": int(value)}
+        for key, value in sorted(tie_breakers.items())
+    )
+    rows.extend(
+        {"metric": f"selected_to:{key}", "value": int(value)}
+        for key, value in sorted(selected_to.items())
+    )
+    rows.extend(
+        {"metric": f"std_tied_candidate_set_size:{key}", "value": int(value)}
+        for key, value in sorted(std_tied_sizes.items())
+    )
     return pd.DataFrame(rows)
 
 
@@ -208,6 +334,8 @@ def write_analysis_outputs(
         "paired_differences": paired_differences(scores, baseline, seed, ci_level),
         "tag_summary": tag_summary(scores),
         "signal_correlations": signal_correlations(scores, baseline),
+        "duplicate_grade_qc": duplicate_grade_qc(scores_jsonl),
+        "routing_diagnostics": routing_diagnostics(scores_jsonl, baseline=baseline),
     }
     for name, table in tables.items():
         path = out / f"{name}.csv"
@@ -223,3 +351,33 @@ def _require_deps() -> None:
             "HealthBench analysis requires numpy and pandas. "
             "Install project requirements before running analysis."
         )
+
+
+def _safe_corr(left, right) -> float:
+    """Pearson correlation, returning NaN for constant vectors."""
+    _require_deps()
+    if float(left.std()) == 0.0 or float(right.std()) == 0.0:
+        return float("nan")
+    return float(left.corr(right))
+
+
+def _safe_fraction(numerator: int, denominator: int) -> float:
+    return float(numerator / denominator) if denominator else float("nan")
+
+
+def _route_trace(record: dict[str, Any]) -> list[dict[str, Any]]:
+    metadata = record.get("strategy_metadata", {}) or {}
+    return metadata.get("route_trace", []) or []
+
+
+def _route_to_sequence(record: dict[str, Any]) -> list[str | None]:
+    return [step.get("to") for step in _route_trace(record)]
+
+
+def _duplicate_qc_empty_row() -> dict[str, float | int]:
+    return {
+        "n_duplicate_pairs": 0,
+        "mean_abs_difference": float("nan"),
+        "median_abs_difference": float("nan"),
+        "max_abs_difference": float("nan"),
+    }
