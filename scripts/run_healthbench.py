@@ -17,7 +17,7 @@ from __future__ import annotations
 import argparse
 import logging
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -36,6 +36,7 @@ from src.agents.healthbench import (  # noqa: E402
     jlens_next_score,
     next_round_robin_speaker,
     parse_handoff_choice,
+    select_jlens_next_speaker,
 )
 from src.data.load_healthbench import (  # noqa: E402
     generation_prompt,
@@ -116,6 +117,7 @@ def choose_jlens_next_speaker(
     from src.jspace.metrics import compute_std
 
     scored: dict[str, dict[str, Any]] = {}
+    selection_scores: dict[str, dict[str, float]] = {}
     for candidate in eligible_speakers:
         messages = build_debate_turn_messages(
             prompt_messages,
@@ -126,6 +128,10 @@ def choose_jlens_next_speaker(
         jspace = extract_jspace(jlens_model, lens, tokenizer, prompt_text, top_k=top_k)
         std = compute_std(jspace["tokens"])
         score = jlens_next_score(std)
+        selection_scores[candidate] = {
+            "std": std,
+            "next_one_score": score,
+        }
         vector_name = f"route_t{len(turns)}_{candidate}"
         vector_path = save_agent_vector(jspace["vector"], out_dir, case_id, vector_name)
         scored[candidate] = {
@@ -135,11 +141,15 @@ def choose_jlens_next_speaker(
             "vector_path": vector_path,
         }
 
-    selected = max(
-        scored,
-        key=lambda name: (scored[name]["next_one_score"], -scored[name]["std"], name),
+    selected, selection_metadata = select_jlens_next_speaker(
+        turns[-1].speaker,
+        selection_scores,
     )
-    return selected, {"route_type": "jlens_next_score", "candidate_scores": scored}
+    return selected, {
+        "route_type": "jlens_next_score",
+        "candidate_scores": scored,
+        **selection_metadata,
+    }
 
 
 def run_debate_strategy(
@@ -313,7 +323,7 @@ def run_case(
     return {
         **scoring_payload(case),
         "prompt_messages": prompt_messages,
-        "generated_at": datetime.utcnow().isoformat(timespec="seconds") + "Z",
+        "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "clinician_order": CLINICIAN_ORDER,
         "discussion_round_cap": discussion_round_cap,
         "strategies": {

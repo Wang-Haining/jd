@@ -25,4 +25,5 @@ python scripts/run_healthbench.py \
   --n-cases 3 \
   --seed 42 \
   --discussion-round-cap 5 \
+  --overwrite \
   --run-name smoke_n3_seed42

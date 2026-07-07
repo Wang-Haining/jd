@@ -9,6 +9,7 @@ from src.agents.healthbench import (
     jlens_next_score,
     next_round_robin_speaker,
     parse_handoff_choice,
+    select_jlens_next_speaker,
 )
 
 
@@ -57,6 +58,20 @@ class HealthBenchOrchestrationTest(unittest.TestCase):
 
     def test_jlens_next_score_prefers_lower_std(self):
         self.assertGreater(jlens_next_score(0.1), jlens_next_score(1.0))
+
+    def test_jlens_tie_breaks_by_round_robin(self):
+        selected, metadata = select_jlens_next_speaker(
+            "generalist",
+            {
+                "emergency": {"std": 0.0, "next_one_score": 1.0},
+                "diagnostician": {"std": 0.0, "next_one_score": 1.0},
+                "evidence": {"std": 0.0, "next_one_score": 1.0},
+                "safety": {"std": 0.0, "next_one_score": 1.0},
+            },
+        )
+
+        self.assertEqual(selected, "emergency")
+        self.assertEqual(metadata["tie_breaker"], "round_robin")
 
     def test_clinician_pool_no_more_than_five(self):
         self.assertLessEqual(len(CLINICIAN_ORDER), 5)

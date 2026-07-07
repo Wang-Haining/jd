@@ -184,6 +184,54 @@ def next_round_robin_speaker(current_speaker: str, eligible_speakers: list[str])
     return ordered[0]
 
 
+def select_jlens_next_speaker(
+    current_speaker: str,
+    candidate_scores: dict[str, dict[str, float]],
+    *,
+    epsilon: float = 1e-9,
+) -> tuple[str, dict[str, Any]]:
+    """
+    Select the next speaker from J-lens candidate scores.
+
+    The score is primary. If candidates are indistinguishable on score and STD,
+    fall back to round-robin among tied speakers so ties are deterministic
+    without depending on lexical clinician IDs.
+    """
+    if not candidate_scores:
+        return current_speaker, {
+            "tie_breaker": "none",
+            "score_tied_candidates": [],
+            "std_tied_candidates": [],
+        }
+
+    best_score = max(values["next_one_score"] for values in candidate_scores.values())
+    score_tied = [
+        name
+        for name, values in candidate_scores.items()
+        if abs(values["next_one_score"] - best_score) <= epsilon
+    ]
+
+    best_std = min(candidate_scores[name]["std"] for name in score_tied)
+    std_tied = [
+        name
+        for name in score_tied
+        if abs(candidate_scores[name]["std"] - best_std) <= epsilon
+    ]
+
+    if len(std_tied) == 1:
+        selected = std_tied[0]
+        tie_breaker = "score"
+    else:
+        selected = next_round_robin_speaker(current_speaker, std_tied)
+        tie_breaker = "round_robin"
+
+    return selected, {
+        "tie_breaker": tie_breaker,
+        "score_tied_candidates": sorted(score_tied),
+        "std_tied_candidates": sorted(std_tied),
+    }
+
+
 def jlens_next_score(std_score: float) -> float:
     """
     Convert candidate next-speaker J-space uncertainty into a routing score.
