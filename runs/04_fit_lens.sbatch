@@ -7,7 +7,7 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64G
-#SBATCH --gpus-per-task=1
+#SBATCH --gres=gpu:h100:1
 #SBATCH --output=logs/fit_lens_%j.out
 #SBATCH --error=logs/fit_lens_%j.err
 #SBATCH --mail-type=END,FAIL

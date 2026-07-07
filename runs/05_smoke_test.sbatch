@@ -1,13 +1,13 @@
 #!/bin/bash
 #SBATCH --job-name=jd_smoke
-#SBATCH --partition=gputest
+#SBATCH --partition=nextgen-gpu
 #SBATCH --account=group-jasonclark
 #SBATCH --time=0-01:00:00
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64G
-#SBATCH --gpus-per-task=1
+#SBATCH --gres=gpu:h100:1
 #SBATCH --output=logs/smoke_%j.out
 #SBATCH --error=logs/smoke_%j.err
 #SBATCH --mail-type=END,FAIL

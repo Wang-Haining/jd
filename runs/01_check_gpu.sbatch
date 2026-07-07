@@ -1,11 +1,11 @@
 #!/bin/bash
 #SBATCH --job-name=jd_gpu_check
-#SBATCH --partition=gputest
+#SBATCH --partition=nextgen-gpu
 #SBATCH --account=group-jasonclark
 #SBATCH --time=0-00:05:00
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --gpus-per-task=1
+#SBATCH --gres=gpu:h100:1
 #SBATCH --mem=16G
 #SBATCH --output=logs/gpu_check_%j.out
 #SBATCH --error=logs/gpu_check_%j.err
