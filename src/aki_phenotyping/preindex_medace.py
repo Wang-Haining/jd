@@ -25,7 +25,10 @@ logger = logging.getLogger("aki_preindex_medace")
 
 DEFAULT_TEMPERATURE = 0.1
 DEFAULT_REASONING_EFFORT = "medium"
-DEFAULT_MAX_TOKENS = 12000
+DEFAULT_MAX_TOKENS = 6000
+DEFAULT_CHUNK_NOTE_CHARS = 45_000
+DEFAULT_PROMPT_NOTE_CHARS = 50_000
+MAX_SINGLE_NOTE_CHARS = 10_000
 
 
 def require_pandas() -> None:
@@ -72,7 +75,7 @@ def build_user_prompt(
     notes: list[dict[str, Any]],
     chunk_index: int | None = None,
     n_chunks: int | None = None,
-    max_note_chars: int = 120_000,
+    max_note_chars: int = DEFAULT_PROMPT_NOTE_CHARS,
 ) -> str:
     """Pack pre-index notes into a prompt."""
     parts = [
@@ -97,8 +100,8 @@ def build_user_prompt(
         text = str(note.get("note_text", "") or "").strip()
         if not text:
             continue
-        if len(text) > 20_000:
-            text = text[:20_000] + "\n[NOTE TRUNCATED]"
+        if len(text) > MAX_SINGLE_NOTE_CHARS:
+            text = text[:MAX_SINGLE_NOTE_CHARS] + "\n[NOTE TRUNCATED]"
         entry = (
             f"\n=== NOTE {idx} | note_id: {note.get('encounter_id') or 'unknown'} "
             f"| note_date: {note.get('timestamp') or 'unknown'} "
@@ -114,13 +117,16 @@ def build_user_prompt(
     return "\n".join(parts)
 
 
-def chunk_notes(notes: list[dict[str, Any]], max_chars: int = 100_000) -> list[list[dict[str, Any]]]:
+def chunk_notes(
+    notes: list[dict[str, Any]],
+    max_chars: int = DEFAULT_CHUNK_NOTE_CHARS,
+) -> list[list[dict[str, Any]]]:
     """Split notes into chronological chunks."""
     chunks: list[list[dict[str, Any]]] = []
     current: list[dict[str, Any]] = []
     current_chars = 0
     for note in sorted(notes, key=lambda x: x.get("timestamp", "")):
-        text_len = min(len(str(note.get("note_text", "") or "")), 20_000) + 250
+        text_len = min(len(str(note.get("note_text", "") or "")), MAX_SINGLE_NOTE_CHARS) + 250
         if current and current_chars + text_len > max_chars:
             chunks.append(current)
             current = []
@@ -377,6 +383,7 @@ def run_one_patient(
 
     chunks = chunk_notes(notes)
     summaries: list[AKIPreIndexSummary] = []
+    chunk_errors: list[dict[str, Any]] = []
     raw_dir = out_dir / "raw"
     raw_dir.mkdir(parents=True, exist_ok=True)
     prompt_tokens = completion_tokens = attempts = 0
@@ -396,12 +403,24 @@ def run_one_patient(
             chunk_index=idx,
             n_chunks=len(chunks),
         )
-        summary, meta = extract_chunk(
-            client=client,
-            model=model,
-            user_prompt=prompt,
-            schema_mode=schema_mode,
-        )
+        try:
+            summary, meta = extract_chunk(
+                client=client,
+                model=model,
+                user_prompt=prompt,
+                schema_mode=schema_mode,
+            )
+        except Exception as exc:
+            logger.exception("Chunk extraction failed for %s chunk %s", sample_id, idx + 1)
+            summary = None
+            meta = {"attempts": 0, "error": str(exc)}
+            chunk_errors.append(
+                {
+                    "chunk_index": idx + 1,
+                    "n_chunks": len(chunks),
+                    "error": str(exc),
+                }
+            )
         prompt_tokens += int(meta.get("prompt_tokens", 0))
         completion_tokens += int(meta.get("completion_tokens", 0))
         attempts += int(meta.get("attempts", 0))
@@ -421,6 +440,7 @@ def run_one_patient(
             "attempts": attempts,
             "prompt_tokens": prompt_tokens,
             "completion_tokens": completion_tokens,
+            "chunk_errors": chunk_errors,
         }
 
     merged = merge_summaries(summaries)
@@ -431,6 +451,7 @@ def run_one_patient(
         "n_notes": len(notes),
         "n_chunks": len(chunks),
         "chunks_ok": len(summaries),
+        "chunks_failed": len(chunk_errors),
         "window_start": window_start,
         "window_end": window_end,
         "attempts": attempts,
@@ -438,6 +459,7 @@ def run_one_patient(
         "completion_tokens": completion_tokens,
         "elapsed_s": round(time.perf_counter() - t0, 1),
         "out_json": str(out_path),
+        "chunk_errors": chunk_errors,
     }
 
 
