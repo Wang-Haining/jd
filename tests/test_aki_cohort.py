@@ -67,6 +67,51 @@ class AKICohortTest(unittest.TestCase):
         self.assertEqual(sample["aki_3mo"].sum(), 1)
         self.assertEqual(sample["aki_6mo"].sum(), 2)
 
+    def test_sampler_tops_up_after_partial_stratum_match(self):
+        import pandas as pd
+
+        from src.aki_phenotyping.cohort import CohortBuildConfig, build_balanced_sample
+
+        rows = []
+        for idx, age in enumerate([50, 60, 70], start=1):
+            rows.append(
+                {
+                    "person_id": idx,
+                    "ici_index_date": "2020-01-01",
+                    "aki_evidence": "both",
+                    "days_to_aki": 30,
+                    "followup_days": 220,
+                    "age_at_index": age,
+                    "gender": "Female",
+                    "race": "White",
+                    "ici_regimen": "pd1_mono",
+                    "preindex_n_notes": 10,
+                }
+            )
+        for idx, age in enumerate([50, 61, 71], start=4):
+            rows.append(
+                {
+                    "person_id": idx,
+                    "ici_index_date": "2020-01-01",
+                    "aki_evidence": "none",
+                    "days_to_aki": None,
+                    "followup_days": 220,
+                    "age_at_index": age,
+                    "gender": "Male" if idx != 4 else "Female",
+                    "race": "Black" if idx != 4 else "White",
+                    "ici_regimen": "pd1_mono",
+                    "preindex_n_notes": 10,
+                }
+            )
+
+        sample = build_balanced_sample(
+            pd.DataFrame(rows),
+            CohortBuildConfig(n_per_class=3, min_control_followup_days=180),
+        )
+
+        self.assertEqual(len(sample), 6)
+        self.assertEqual(sample["aki_any"].sum(), 3)
+
 
 if __name__ == "__main__":
     unittest.main()

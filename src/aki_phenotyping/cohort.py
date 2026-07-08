@@ -222,6 +222,7 @@ def build_balanced_sample(frame, config: CohortBuildConfig = CohortBuildConfig()
     """Build a balanced AKI-positive/no-AKI sample with coarse stratum matching."""
     require_pandas()
     df = add_sampling_strata(add_aki_labels(frame))
+    df["_aki_source_row"] = range(len(df))
     evidence = df["aki_evidence"].fillna("none").astype(str)
     followup = pd.to_numeric(df.get("followup_days"), errors="coerce")
 
@@ -252,16 +253,33 @@ def build_balanced_sample(frame, config: CohortBuildConfig = CohortBuildConfig()
         sampled_controls = controls.sample(n=take, random_state=rng + 1)
 
     if config.n_per_class is not None:
-        take = min(config.n_per_class, len(sampled_cases), len(sampled_controls))
-        sampled_cases = sampled_cases.sample(n=take, random_state=rng)
-        sampled_controls = sampled_controls.sample(n=take, random_state=rng + 1)
+        target = min(config.n_per_class, len(cases), len(controls))
+        sampled_cases = _top_up_sample(sampled_cases, cases, target, rng + 2)
+        sampled_controls = _top_up_sample(sampled_controls, controls, target, rng + 3)
+        sampled_cases = sampled_cases.sample(n=target, random_state=rng)
+        sampled_controls = sampled_controls.sample(n=target, random_state=rng + 1)
 
     sampled = pd.concat([sampled_cases, sampled_controls], ignore_index=True)
     sampled = sampled.sample(frac=1.0, random_state=rng).reset_index(drop=True)
+    sampled = sampled.drop(columns=["_aki_source_row"], errors="ignore")
     sampled["label_source"] = sampled["aki_evidence"].map(
         lambda value: "positive_high_confidence" if value in config.positive_evidence else "negative_control"
     )
     return sampled
+
+
+def _top_up_sample(sampled, pool, target: int, random_state: int):
+    """Top up a stratified sample from the remaining pool to reach target size."""
+    require_pandas()
+    if len(sampled) >= target:
+        return sampled
+    used = set(sampled.get("_aki_source_row", []))
+    remaining = pool[~pool["_aki_source_row"].isin(used)]
+    need = min(target - len(sampled), len(remaining))
+    if need <= 0:
+        return sampled
+    top_up = remaining.sample(n=need, random_state=random_state)
+    return pd.concat([sampled, top_up], ignore_index=True)
 
 
 def write_manifest(path: str | Path, *, input_csv: str | Path, config: CohortBuildConfig, frame) -> None:
