@@ -36,7 +36,6 @@ from src.healthbench.modeling import (  # noqa: E402
     default_lens_path,
     load_jlens_model,
     load_lens,
-    load_model_tokenizer,
     render_chat_prompt,
 )
 
@@ -180,12 +179,20 @@ def save_vector(vector, out_dir: Path, sample_id: str, name: str) -> str:
 
 
 def load_jlens_stack(args: argparse.Namespace):
-    model_cfg = {
-        "name": args.jlens_hf_model,
-        "dtype": args.jlens_dtype,
-        "device_map": "auto",
-    }
-    hf_model, tokenizer = load_model_tokenizer(model_cfg)
+    import torch
+    import transformers
+
+    dtype = getattr(torch, args.jlens_dtype)
+    hf_model = transformers.AutoModelForCausalLM.from_pretrained(
+        args.jlens_hf_model,
+        torch_dtype=dtype,
+    )
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    hf_model = hf_model.to(device)
+    hf_model.eval()
+    tokenizer = transformers.AutoTokenizer.from_pretrained(args.jlens_hf_model)
+    if tokenizer.pad_token_id is None and tokenizer.eos_token_id is not None:
+        tokenizer.pad_token = tokenizer.eos_token
     jlens_model = load_jlens_model(hf_model, tokenizer)
     lens_path = Path(args.lens_path) if args.lens_path else default_lens_path(ROOT, args.jlens_hf_model)
     lens = load_lens(lens_path)
