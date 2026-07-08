@@ -14,6 +14,7 @@ from src.aki_phenotyping.cohort import (  # noqa: E402
     add_preindex_note_metrics,
     build_balanced_sample,
     load_denominator,
+    merge_baseline_features,
     parse_evidence_list,
     write_manifest,
 )
@@ -23,8 +24,13 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Build balanced ICI-AKI cohort.")
     parser.add_argument("--denominator-csv", required=True)
     parser.add_argument("--data-dir", default=None, help="irAKI_data root for note metrics.")
+    parser.add_argument(
+        "--baseline-features-csv",
+        default=None,
+        help="Optional patient-level demographics/Charlson/medication CSV.",
+    )
     parser.add_argument("--out-csv", required=True)
-    parser.add_argument("--n-per-class", type=int, default=100)
+    parser.add_argument("--n-per-class", type=int, default=250)
     parser.add_argument("--positive-evidence", default="both")
     parser.add_argument("--control-evidence", default="none")
     parser.add_argument("--min-control-followup-days", type=int, default=180)
@@ -41,6 +47,8 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
     frame = load_denominator(args.denominator_csv)
+    if args.baseline_features_csv:
+        frame = merge_baseline_features(frame, args.baseline_features_csv)
     if args.data_dir and not args.skip_note_metrics:
         frame = add_preindex_note_metrics(frame, args.data_dir, args.lookback_days)
     else:

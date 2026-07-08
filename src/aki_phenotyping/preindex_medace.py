@@ -13,6 +13,7 @@ from typing import Any
 from openai import OpenAI
 from pydantic import ValidationError
 
+from .baseline_features import format_baseline_features
 from .medace_schema import AKIPreIndexSummary, Source
 
 try:
@@ -73,6 +74,7 @@ def build_user_prompt(
     window_start: str,
     window_end: str,
     notes: list[dict[str, Any]],
+    baseline_features: str | None = None,
     chunk_index: int | None = None,
     n_chunks: int | None = None,
     max_note_chars: int = DEFAULT_PROMPT_NOTE_CHARS,
@@ -92,6 +94,8 @@ def build_user_prompt(
     if demographics:
         demo = "\n".join(f"- {key}: {value}" for key, value in demographics.items())
         parts.append("demographics:\n" + demo)
+    if baseline_features:
+        parts.append("structured_pre_index_baseline_features:\n" + baseline_features)
 
     total = sum(len(part) for part in parts)
     packed = 0
@@ -396,6 +400,7 @@ def run_one_patient(
                 "age_at_index": getattr(row, "age_at_index", None),
                 "ici_regimen": getattr(row, "ici_regimen", None),
             },
+            baseline_features=format_baseline_features(row),
             landmark_date=landmark,
             window_start=window_start,
             window_end=window_end,

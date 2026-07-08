@@ -133,7 +133,7 @@ def add_preindex_note_metrics(frame, data_dir: str | Path, lookback_days: int = 
 
 
 def add_sampling_strata(frame):
-    """Add coarse strata for age, ICI regimen, and pre-index note volume."""
+    """Add coarse strata for age, demographics, regimen, and note volume."""
     require_pandas()
     df = frame.copy()
     age = pd.to_numeric(df.get("age_at_index"), errors="coerce")
@@ -149,10 +149,73 @@ def add_sampling_strata(frame):
         bins=[-1, 0, 5, 20, 100, 1_000_000],
         labels=["0", "1_5", "6_20", "21_100", "gt100"],
     ).astype(str)
+    gender = df["gender"] if "gender" in df.columns else pd.Series("unknown", index=df.index)
+    race = df["race"] if "race" in df.columns else pd.Series("unknown", index=df.index)
+    df["gender_bin"] = _clean_stratum_value(gender).map(_coarse_gender)
+    df["race_bin"] = _clean_stratum_value(race).map(_coarse_race)
     df["sample_stratum"] = (
-        df["age_bin"] + "|" + df["regimen_bin"] + "|" + df["note_count_bin"]
+        df["age_bin"]
+        + "|"
+        + df["gender_bin"]
+        + "|"
+        + df["race_bin"]
+        + "|"
+        + df["regimen_bin"]
+        + "|"
+        + df["note_count_bin"]
     )
     return df
+
+
+def _clean_stratum_value(values):
+    require_pandas()
+    return (
+        values.fillna("unknown")
+        .astype(str)
+        .str.strip()
+        .str.lower()
+        .str.replace(r"\s+", "_", regex=True)
+        .replace({"": "unknown", "nan": "unknown", "none": "unknown"})
+    )
+
+
+def _coarse_gender(value: str) -> str:
+    if value in {"m", "male", "man"}:
+        return "male"
+    if value in {"f", "female", "woman"}:
+        return "female"
+    return "unknown"
+
+
+def _coarse_race(value: str) -> str:
+    if "white" in value or "caucasian" in value:
+        return "white"
+    if "black" in value or "african" in value:
+        return "black"
+    if "asian" in value:
+        return "asian"
+    if value in {"unknown", "nan", "none", "declined", "refused"}:
+        return "unknown"
+    return "other"
+
+
+def merge_baseline_features(frame, baseline_features_csv: str | Path):
+    """Attach patient-level baseline features before sampling."""
+    require_pandas()
+    df = frame.copy()
+    baseline = pd.read_csv(baseline_features_csv)
+    if "person_id" not in baseline.columns:
+        raise ValueError("Baseline feature file must contain person_id")
+    baseline["person_id"] = pd.to_numeric(baseline["person_id"], errors="coerce").astype("Int64")
+    baseline = baseline.dropna(subset=["person_id"]).copy()
+    baseline["person_id"] = baseline["person_id"].astype("int64")
+    df["person_id"] = pd.to_numeric(df["person_id"], errors="coerce").astype("Int64")
+    df = df.dropna(subset=["person_id"]).copy()
+    df["person_id"] = df["person_id"].astype("int64")
+    overlap = [col for col in baseline.columns if col in df.columns and col != "person_id"]
+    if overlap:
+        df = df.drop(columns=overlap)
+    return df.merge(baseline, on="person_id", how="left")
 
 
 def build_balanced_sample(frame, config: CohortBuildConfig = CohortBuildConfig()):

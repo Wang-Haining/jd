@@ -103,7 +103,9 @@ def build_prediction_messages(
     system = AKI_AGENT_PROMPTS[agent_id]
     user = (
         "Predict this patient's risk of post-ICI acute kidney injury using only "
-        "the pre-index structured note summary below. AKI means KDIGO stage 1 "
+        "the pre-index structured note summary below. It may include structured "
+        "baseline demographics, Charlson comorbidity flags, and prior-year "
+        "medication names in addition to note-derived facts. AKI means KDIGO stage 1 "
         "or higher: serum creatinine increase >=0.3 mg/dL or >=1.5x baseline. "
         "Do not infer that an outcome occurred unless it is supported by "
         "pre-index risk factors; this is a prediction task. The yes/no/uncertain "
