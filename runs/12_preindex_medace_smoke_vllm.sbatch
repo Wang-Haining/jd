@@ -34,6 +34,7 @@ export PYTHONNOUSERSITE=1
 export HF_HOME="${HF_HOME:-$HOME/hf-cache}"
 export HF_HUB_ENABLE_HF_TRANSFER=1
 export VLLM_ATTENTION_BACKEND=FLASH_ATTN
+export VLLM_USE_FLASHINFER_SAMPLER=0
 
 GPUC=$(nvidia-smi -L 2>/dev/null | wc -l)
 TP="${TP:-$GPUC}"
