@@ -2,7 +2,7 @@
 #SBATCH --job-name=jd_aki_agents
 #SBATCH --partition=nextgen-gpu
 #SBATCH --account=group-jasonclark
-#SBATCH --gres=gpu:h100:2
+#SBATCH --gres=gpu:h100:1
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=128G
 #SBATCH --time=4:00:00
@@ -37,8 +37,13 @@ export VLLM_ATTENTION_BACKEND=FLASH_ATTN
 
 GPUC=$(nvidia-smi -L 2>/dev/null | wc -l)
 TP="${TP:-$GPUC}"
-MAXLEN="${MAXLEN:-65536}"
-MAX_SEQS="${MAX_SEQS:-8}"
+if [ "$TP" -ge 2 ]; then
+  MAXLEN="${MAXLEN:-65536}"
+  MAX_SEQS="${MAX_SEQS:-8}"
+else
+  MAXLEN="${MAXLEN:-32768}"
+  MAX_SEQS="${MAX_SEQS:-4}"
+fi
 GPU_UTIL="${GPU_UTIL:-0.92}"
 
 port_in_use() {
@@ -82,4 +87,3 @@ python scripts/run_aki_agents.py \
   --limit "${LIMIT}" \
   --debate-rounds "${DEBATE_ROUNDS}" \
   --overwrite
-
