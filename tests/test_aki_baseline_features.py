@@ -9,11 +9,13 @@ HAS_PANDAS = importlib.util.find_spec("pandas") is not None
 class AKIBaselineFeaturesTest(unittest.TestCase):
     def test_normalize_and_prefix_matching(self):
         from src.aki_phenotyping.baseline_features import (
+            CHARLSON_COMORBIDITIES,
             CHARLSON_CODESETS,
             matches_codeset,
             normalize_icd_code,
         )
 
+        self.assertEqual(len(CHARLSON_COMORBIDITIES), 19)
         self.assertEqual(normalize_icd_code("E11.22"), "E1122")
         self.assertEqual(normalize_icd_code("foo^^N18.6"), "N186")
         self.assertTrue(matches_codeset("N18.6", CHARLSON_CODESETS["Renal_Disease_Severe"]))
@@ -47,6 +49,9 @@ class AKIBaselineFeaturesTest(unittest.TestCase):
         self.assertEqual(flags.loc[2, "Renal_Disease_Severe"], 1)
         self.assertEqual(flags.loc[2, "Renal_Disease_Mild_Moderate"], 0)
         self.assertEqual(flags.loc[3, "Diabetes_without_Chronic_Complications"], 0)
+
+        all_preindex = build_charlson_flags(dx, cohort).set_index("person_id")
+        self.assertEqual(all_preindex.loc[3, "Diabetes_without_Chronic_Complications"], 1)
 
     def test_medications_and_prompt_format(self):
         import pandas as pd

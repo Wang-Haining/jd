@@ -16,7 +16,7 @@ PROJ="${PROJ:-/home/g91p721/jd}"
 VENV="${VENV:-/home/g91p721/agentic_delphi/.venv}"
 DATA_DIR="${DATA_DIR:-/home/g91p721/DelPHEA-irAKI/irAKI_data}"
 DENOM="${DENOM:-/home/g91p721/agentic_delphi/results/cohort/ici_denominator_with_aki_flags.csv}"
-BASELINE_FEATURES="${BASELINE_FEATURES:-${PROJ}/results/aki_phenotyping/baseline_features_pre365.csv}"
+BASELINE_FEATURES="${BASELINE_FEATURES:-${PROJ}/results/aki_phenotyping/baseline_features_preindex_charlson_pre365drugs.csv}"
 OUT="${OUT:-${PROJ}/results/aki_phenotyping/balanced_cohort.csv}"
 N_PER_CLASS="${N_PER_CLASS:-250}"
 

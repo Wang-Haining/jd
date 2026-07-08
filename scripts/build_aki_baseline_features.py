@@ -24,7 +24,18 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--diagnosis-path", default=None, help="condition_occurrence path.")
     parser.add_argument("--medication-path", default=None, help="drug_exposure path.")
     parser.add_argument("--person-path", default=None, help="OMOP person path.")
-    parser.add_argument("--lookback-days", type=int, default=365)
+    parser.add_argument(
+        "--charlson-lookback-days",
+        type=int,
+        default=None,
+        help="Charlson diagnosis lookback. Omit for all pre-index history.",
+    )
+    parser.add_argument(
+        "--drug-lookback-days",
+        type=int,
+        default=365,
+        help="Medication exposure lookback before ICI index.",
+    )
     parser.add_argument("--max-drugs", type=int, default=80)
     return parser.parse_args()
 
@@ -37,7 +48,8 @@ def main() -> None:
         diagnosis_path=args.diagnosis_path,
         medication_path=args.medication_path,
         person_path=args.person_path,
-        lookback_days=args.lookback_days,
+        charlson_lookback_days=args.charlson_lookback_days,
+        drug_lookback_days=args.drug_lookback_days,
         max_drugs=args.max_drugs,
     )
     out_csv = Path(args.out_csv)
@@ -55,7 +67,8 @@ def main() -> None:
         "diagnosis_path": args.diagnosis_path,
         "medication_path": args.medication_path,
         "person_path": args.person_path,
-        "lookback_days": args.lookback_days,
+        "charlson_lookback_days": args.charlson_lookback_days,
+        "drug_lookback_days": args.drug_lookback_days,
         "max_drugs": args.max_drugs,
         "n_rows": int(len(features)),
         "n_with_any_charlson_flag": int(features["charlson_comorbidity_count"].gt(0).sum()),

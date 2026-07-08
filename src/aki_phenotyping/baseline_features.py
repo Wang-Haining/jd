@@ -1,7 +1,9 @@
 """Pre-index structured baseline features for ICI-AKI prediction.
 
 This module intentionally stays narrow: demographics, Glasheen/NCI Charlson
-binary comorbidity flags, and prior-year medication names. It produces a
+binary comorbidity flags, and prior-year medication names. Charlson flags use
+all diagnosis history before the ICI index by default; medications use the
+prior year by default. It produces a
 mergeable patient-level CSV for the tumor-board-style AKI prediction pipeline.
 """
 from __future__ import annotations
@@ -506,7 +508,14 @@ def build_demographic_features(cohort, person_frame=None):
     return out[["person_id", "age_at_index", "gender", "race", "ethnicity"]]
 
 
-def _windowed_rows(frame, patient_index, *, person_col: str, date_col: str, lookback_days: int):
+def _windowed_rows(
+    frame,
+    patient_index,
+    *,
+    person_col: str,
+    date_col: str,
+    lookback_days: int | None,
+):
     require_pandas()
     data = frame.copy()
     data[person_col] = pd.to_numeric(data[person_col], errors="coerce")
@@ -516,20 +525,26 @@ def _windowed_rows(frame, patient_index, *, person_col: str, date_col: str, look
     data = data.merge(index, left_on=person_col, right_on="person_id", how="inner")
     data[date_col] = pd.to_datetime(data[date_col], errors="coerce")
     data = data.dropna(subset=[date_col, "ici_index_date"])
+    before_or_at_index = data[date_col] <= data["ici_index_date"]
+    if lookback_days is None:
+        return data[before_or_at_index].copy()
     start = data["ici_index_date"] - pd.to_timedelta(lookback_days, unit="D")
-    return data[(start <= data[date_col]) & (data[date_col] <= data["ici_index_date"])].copy()
+    return data[(start <= data[date_col]) & before_or_at_index].copy()
 
 
 def build_charlson_flags(
     diagnosis_frame,
     patient_index,
     *,
-    lookback_days: int = 365,
+    lookback_days: int | None = None,
     person_col: str | None = None,
     code_col: str | None = None,
     date_col: str | None = None,
 ):
-    """Compute pre-index Charlson binary flags from diagnosis rows."""
+    """Compute pre-index Charlson binary flags from diagnosis rows.
+
+    ``lookback_days=None`` means all diagnosis history before or at ICI index.
+    """
     require_pandas()
     index = _prepare_patient_index(patient_index)
     person_col = person_col or _pick_column(diagnosis_frame.columns, PERSON_ALIASES)
@@ -659,7 +674,8 @@ def build_baseline_features(
     diagnosis_frame=None,
     medication_frame=None,
     person_frame=None,
-    lookback_days: int = 365,
+    charlson_lookback_days: int | None = None,
+    drug_lookback_days: int = 365,
     max_drugs: int = 80,
 ):
     """Combine demographics, Charlson flags, and medication features."""
@@ -673,7 +689,11 @@ def build_baseline_features(
             charlson[col] = 0
         charlson["charlson_comorbidity_count"] = 0
     else:
-        charlson = build_charlson_flags(diagnosis_frame, index, lookback_days=lookback_days)
+        charlson = build_charlson_flags(
+            diagnosis_frame,
+            index,
+            lookback_days=charlson_lookback_days,
+        )
 
     if medication_frame is None:
         meds = index[["person_id"]].copy()
@@ -683,7 +703,7 @@ def build_baseline_features(
         meds = build_medication_features(
             medication_frame,
             index,
-            lookback_days=lookback_days,
+            lookback_days=drug_lookback_days,
             max_drugs=max_drugs,
         )
 
@@ -705,7 +725,8 @@ def build_baseline_features_from_paths(
     diagnosis_path: str | Path | None = None,
     medication_path: str | Path | None = None,
     person_path: str | Path | None = None,
-    lookback_days: int = 365,
+    charlson_lookback_days: int | None = None,
+    drug_lookback_days: int = 365,
     max_drugs: int = 80,
 ):
     """Load known OMOP tables and build patient-level baseline features."""
@@ -731,7 +752,8 @@ def build_baseline_features_from_paths(
         diagnosis_frame=diagnosis,
         medication_frame=medication,
         person_frame=person,
-        lookback_days=lookback_days,
+        charlson_lookback_days=charlson_lookback_days,
+        drug_lookback_days=drug_lookback_days,
         max_drugs=max_drugs,
     )
 
