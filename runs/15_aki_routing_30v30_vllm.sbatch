@@ -12,7 +12,8 @@
 set -euo pipefail
 
 PROJ="${PROJ:-/home/g91p721/jd}"
-VENV="${VENV:-/home/g91p721/agentic_delphi/.venv}"
+VLLM_VENV="${VLLM_VENV:-/home/g91p721/agentic_delphi/.venv}"
+RUN_VENV="${RUN_VENV:-/home/g91p721/jd/.venv}"
 COHORT="${COHORT:-${PROJ}/results/aki_phenotyping/balanced_cohort_30v30_preindex_charlson_pre365drugs.csv}"
 SUMMARY_DIR="${SUMMARY_DIR:-${PROJ}/results/aki_phenotyping/preindex_medace_30v30_preindex_charlson}"
 OUT_JSONL="${OUT_JSONL:-${PROJ}/results/aki_phenotyping/aki_routing_30v30_preindex_charlson_qwen.jsonl}"
@@ -32,7 +33,7 @@ HOST="127.0.0.1"
 cd "${PROJ}"
 mkdir -p logs "$(dirname "${OUT_JSONL}")"
 source runs/tempest_env.sh
-source "${VENV}/bin/activate"
+source "${VLLM_VENV}/bin/activate"
 
 export PYTHONUNBUFFERED=1
 export PYTHONNOUSERSITE=1
@@ -78,6 +79,8 @@ done
 curl -fsS "${API}/v1/chat/completions" -H "Content-Type: application/json" \
   -d "{\"model\":\"${SERVED_NAME}\",\"messages\":[{\"role\":\"user\",\"content\":\"ping\"}],\"max_tokens\":1}" \
   >/dev/null || true
+
+source "${RUN_VENV}/bin/activate"
 
 python scripts/run_aki_routing_agents.py \
   --cohort-csv "${COHORT}" \
