@@ -19,6 +19,7 @@ from src.agents.aki import (  # noqa: E402
     AKIPrediction,
     aggregate_predictions,
     build_prediction_messages,
+    normalize_prediction_calls,
     prediction_schema,
 )
 
@@ -70,7 +71,7 @@ def call_prediction(client: OpenAI, model: str, messages: list[dict[str, str]]) 
         if text.startswith("```"):
             text = text.split("\n", 1)[-1].removesuffix("```").strip()
         try:
-            return AKIPrediction.model_validate(json.loads(text))
+            return normalize_prediction_calls(AKIPrediction.model_validate(json.loads(text)))
         except (json.JSONDecodeError, ValidationError) as exc:
             last_error = str(exc)
             messages.append({"role": "assistant", "content": text})

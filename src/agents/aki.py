@@ -106,7 +106,9 @@ def build_prediction_messages(
         "the pre-index structured note summary below. AKI means KDIGO stage 1 "
         "or higher: serum creatinine increase >=0.3 mg/dL or >=1.5x baseline. "
         "Do not infer that an outcome occurred unless it is supported by "
-        "pre-index risk factors; this is a prediction task.\n\n"
+        "pre-index risk factors; this is a prediction task. The yes/no/uncertain "
+        "calls must match the probabilities: yes if probability >=0.65, no if "
+        "probability <=0.35, otherwise uncertain.\n\n"
         "Return only JSON matching the requested schema.\n\n"
         f"AGENT_ID: {agent_id}\n\n"
         f"PRE_INDEX_SUMMARY:\n{render_summary_for_prompt(summary)}"
@@ -123,6 +125,15 @@ def call_from_probability(probability: float) -> str:
     if probability <= 0.35:
         return "no"
     return "uncertain"
+
+
+def normalize_prediction_calls(prediction: AKIPrediction) -> AKIPrediction:
+    """Make coarse call fields deterministic derivatives of probabilities."""
+    data = prediction.model_dump()
+    data["aki_any_call"] = call_from_probability(data["aki_any_probability"])
+    data["aki_3mo_call"] = call_from_probability(data["aki_3mo_probability"])
+    data["aki_6mo_call"] = call_from_probability(data["aki_6mo_probability"])
+    return AKIPrediction.model_validate(data)
 
 
 def aggregate_predictions(
@@ -149,4 +160,3 @@ def aggregate_predictions(
         aki_3mo_call=call_from_probability(p3),
         aki_6mo_call=call_from_probability(p6),
     )
-
