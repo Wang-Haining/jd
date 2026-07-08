@@ -35,8 +35,8 @@ pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
 
 # Core deps
 pip install transformers accelerate datasets
-pip install scipy scikit-learn matplotlib seaborn pandas statsmodels
-pip install tqdm pyyaml openai pytest
+pip install scipy scikit-learn matplotlib seaborn pandas pyarrow statsmodels
+pip install tqdm pyyaml openai pydantic pytest
 
 # J-lens — try pip name first, fall back to git
 pip install jlens 2>/dev/null || \
