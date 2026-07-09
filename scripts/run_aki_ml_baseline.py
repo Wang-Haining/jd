@@ -48,6 +48,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--baseline-features-csv", required=True)
     parser.add_argument("--out-dir", required=True)
     parser.add_argument("--model-type", default="auto", choices=["auto", "xgboost", "hist_gradient_boosting"])
+    parser.add_argument("--class-weight", default="none", choices=["none", "balanced"])
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--n-splits", type=int, default=5)
     parser.add_argument("--include-regimen", action="store_true")
@@ -98,8 +99,6 @@ def choose_model(model_type: str, seed: int, y_train) -> tuple[str, Any]:
         try:
             from xgboost import XGBClassifier
 
-            neg = max(1, int((y_train == 0).sum()))
-            pos = max(1, int((y_train == 1).sum()))
             return (
                 "xgboost",
                 XGBClassifier(
@@ -112,7 +111,6 @@ def choose_model(model_type: str, seed: int, y_train) -> tuple[str, Any]:
                     eval_metric="logloss",
                     n_jobs=4,
                     random_state=seed,
-                    scale_pos_weight=neg / pos,
                 ),
             )
         except Exception:
@@ -218,8 +216,13 @@ def run_outcome(frame, outcome: str, min_control_followup_days: int, args, numer
         y_train, y_test = y.iloc[train_idx], y.iloc[test_idx]
         used_model_type, model = choose_model(args.model_type, args.seed + fold, y_train)
         pipe = make_pipeline(numeric_cols, categorical_cols, model)
-        weights = compute_sample_weight(class_weight="balanced", y=y_train)
-        pipe.fit(X_train, y_train, model__sample_weight=weights)
+        fit_kwargs = {}
+        if args.class_weight == "balanced":
+            fit_kwargs["model__sample_weight"] = compute_sample_weight(
+                class_weight="balanced",
+                y=y_train,
+            )
+        pipe.fit(X_train, y_train, **fit_kwargs)
         probs = pipe.predict_proba(X_test)[:, 1]
         oof[test_idx] = probs
         fold_metric = compute_metrics(y_test.reset_index(drop=True), pd.Series(probs))
@@ -297,6 +300,7 @@ def main() -> None:
                 "numeric_columns": numeric_cols,
                 "categorical_columns": categorical_cols,
                 "model_type_requested": args.model_type,
+                "class_weight": args.class_weight,
                 "seed": args.seed,
                 "n_splits_requested": args.n_splits,
                 "n_rows_merged": int(len(frame)),

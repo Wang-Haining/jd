@@ -18,6 +18,7 @@ DENOM="${DENOM:-/home/g91p721/agentic_delphi/results/cohort/ici_denominator_with
 BASELINE_FEATURES="${BASELINE_FEATURES:-${PROJ}/results/aki_phenotyping/baseline_features_preindex_charlson_pre365drugs.csv}"
 OUT_DIR="${OUT_DIR:-${PROJ}/results/aki_phenotyping/ml_baseline_demo_charlson}"
 MODEL_TYPE="${MODEL_TYPE:-auto}"
+CLASS_WEIGHT="${CLASS_WEIGHT:-none}"
 N_SPLITS="${N_SPLITS:-5}"
 SEED="${SEED:-42}"
 INCLUDE_REGIMEN="${INCLUDE_REGIMEN:-0}"
@@ -36,6 +37,7 @@ CMD=(python scripts/run_aki_ml_baseline.py \
   --baseline-features-csv "${BASELINE_FEATURES}" \
   --out-dir "${OUT_DIR}" \
   --model-type "${MODEL_TYPE}" \
+  --class-weight "${CLASS_WEIGHT}" \
   --n-splits "${N_SPLITS}" \
   --seed "${SEED}")
 
